@@ -14,12 +14,11 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 class Kmers(object):
 
-    def __init__(self, pathToSamples,pathToTest,kmerLength,disease):
+    def __init__(self, pathToSamples,pathToTest,kmerLength):
 
         self.pathabundanceDir = ""
         self.testabundaceDir = ""
         self.kmerLength = kmerLength
-        self.disease = disease
         self.pathwayMatrix = pd.DataFrame()
         self.pathToSamples = pathToSamples
         self.kmerMatrix = pd.DataFrame()
@@ -97,13 +96,12 @@ class Kmers(object):
         print(pf1)
         self.kmerMatrix=pf1
         pf1.to_csv('countmatrix_train.tsv', sep="\t")
-        print("----- done counting -----\n")
+        
 
 
 
 
     def read_pathcoverage(self,path,fileName, filter):
-        print("----- start reading path abundance files-----")
         os.system('rm -r '+path+ '/*_temp')
         os.system('rm '+path+ '/*_genefamilies.tsv')
         os.system('rm '+path+ '/*_pathcoverage.tsv')
@@ -180,11 +178,9 @@ class Kmers(object):
                 os.system('cat ' + self.pathToSamples + '/' + file.split('_')[0] + '*.fastq.gz > concatFiles_test/' +
                           file.split('_')[0] + '.fastq.gz')
         self.pathToTest = "./concatFiles_test"
-        print("----- paired-end fastq files successfully concatenated -----")
 
 
     def get_files_fromdir(self,inputDir):
-        inputDisease = self.disease
         kmerLength = self.kmerLength
         listWithGzFiles = []
         dirList = os.listdir(inputDir)
@@ -195,12 +191,11 @@ class Kmers(object):
 
 
     def run_humann(self,pathToFiles, pathToAbundance):
-        print("----- starting humann-----")
         start_time = datetime.now()
         dirList = os.listdir(pathToFiles)
         for file in dirList:
             pathToFile = pathToFiles+"/"+os.path.basename(file)
-            os.system('humann --input '+pathToFile+' --output '+pathToAbundance+' --resume --threads 8 --bypass-translated-search')
+            os.system('humann --input '+pathToFile+' --output '+pathToAbundance+' --resume --threads 8')
         end_time = datetime.now()
         print('Duration humann: {}'.format(end_time - start_time))
         return pathToAbundance
@@ -264,18 +259,17 @@ class Kmers(object):
         kmers=self.kmerMatrix.index.tolist()
         pathways = self.pathwayMatrix.index.tolist()
 
-
-        tmp = self.kmerMatrix#.apply(np.random.permutation, axis=1)
-
         # shuffle lables in kmer matrix
+        tmp = self.kmerMatrix #.apply(np.random.permutation, axis=1)
         #tmp = pd.DataFrame(tmp.tolist(), index=self.kmerMatrix.index, columns=self.kmerMatrix.columns)
+  
+        
+        pathMatrixTrans = pd.DataFrame(preprocessing.normalize(self.pathwayMatrix),columns = self.pathwayMatrix.columns,index=self.pathwayMatrix.index)
+        kmerMatrixTrans = pd.DataFrame(preprocessing.normalize(tmp),columns = tmp.columns,index=tmp.index)
 
         # shuffle lables in pathway matrix
-        #pathMatrixTrans = pd.DataFrame(preprocessing.normalize(self.pathwayMatrix),columns = self.pathwayMatrix.columns,index=self.pathwayMatrix.index)
-        #kmerMatrixTrans = pd.DataFrame(preprocessing.normalize(tmp),columns = tmp.columns,index=tmp.index)
-
-        tmp = self.pathwayMatrix.apply(np.random.permutation, axis=1)
-        tmp = pd.DataFrame(tmp.tolist(), index=self.pathwayMatrix.index, columns=self.pathwayMatrix.columns)
+        #tmp = self.pathwayMatrix.apply(np.random.permutation, axis=1)
+        #tmp = pd.DataFrame(tmp.tolist(), index=self.pathwayMatrix.index, columns=self.pathwayMatrix.columns)
 
         pathMatrixTrans = pd.DataFrame(preprocessing.normalize(tmp), columns=tmp.columns,
                                        index=tmp.index)
@@ -287,26 +281,21 @@ class Kmers(object):
         rows = pathMatrixTrans.shape[0]
         for i in range(0, rows):
             pathMatrixTrans_one = pathMatrixTrans.iloc[[i]].T
-            kmerMatrixTrans_one = kmerMatrixTrans.T
+            kmerMatrixTrans_one = kmerMatrixTrans.T       
 
-            kmerMatrixTrans_one.insert(0, "Sample", kmerMatrixTrans_one.index, True)
-            pathMatrixTrans_one.insert(0, "Sample", pathMatrixTrans_one.index, True)
-
-            merged = pathMatrixTrans_one.merge(kmerMatrixTrans_one, on='Sample', how="outer")
-            merged = merged.set_index(merged["Sample"])
-
-            del merged["Sample"]
-            X, y = merged.iloc[:, 1:], merged.iloc[:, 0]
+            X, y = kmerMatrixTrans_one, pathMatrixTrans_one
 
             alphas = [0.0001, 0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 1]
             elastic_cv = ElasticNetCV(alphas=alphas, cv=10)
             model = elastic_cv.fit(X, y)
             self.model_map[pathways[i]] = model
-            coef_dict_baseline = {}
-            for coef, feat in zip(model.coef_, X.columns):
-                if not coef == 0.0:
-                    coef_dict_baseline[feat] = coef
-            ls = list(reversed(sorted(coef_dict_baseline.items(), key=lambda kv: abs(kv[1]))))
+            
+            # extract coefficients
+            #coef_dict_baseline = {}
+            #for coef, feat in zip(model.coef_, X.columns):
+            #    if not coef == 0.0:
+            #        coef_dict_baseline[feat] = coef
+            #ls = list(reversed(sorted(coef_dict_baseline.items(), key=lambda kv: abs(kv[1]))))
 
         return kmers
 
@@ -323,14 +312,13 @@ class Kmers(object):
 
     def predict_test(self):
         kmers = self.train_model()
-        print("done training")
+
         self.testbundanceDir = self.run_humann(self.pathToTest, "humann_out_test")
         self.testabundaceDir = "humann_out_test"
         print(self.testabundaceDir)
         self.pathwayTest = self.read_pathcoverage(self.testabundaceDir, "pathway_test.tsv",False)
         file_list = self.get_files_fromdir(self.pathToTest)
         self.prepare_test_set(file_list,kmers)
-        print('done test')
         testFunctions = self.pathwayTest.index.tolist()
         pathTest = pd.DataFrame(preprocessing.normalize(self.pathwayTest), columns=self.pathwayTest.columns,
                                        index=self.pathwayTest.index)
@@ -345,20 +333,12 @@ class Kmers(object):
                     pathMatrixTrans_one = pathTest.iloc[[i]].T
                     kmerMatrixTrans_one = kmerTest.T
 
-                    kmerMatrixTrans_one.insert(0, "Sample", kmerMatrixTrans_one.index, True)
-                    pathMatrixTrans_one.insert(0, "Sample", pathMatrixTrans_one.index, True)
-
-                    merged = pathMatrixTrans_one.merge(kmerMatrixTrans_one, on='Sample', how="outer")
-                    merged = merged.set_index(merged["Sample"])
-
-                    del merged["Sample"]
-                    xtest, ytest = merged.iloc[:, 1:], merged.iloc[:, 0]
+                    xtest, ytest = kmerMatrixTrans_one, pathMatrixTrans_one
                     ypred = model.predict(xtest)
                     score = model.score(xtest, ytest)
                     mse = mean_squared_error(ytest, ypred)
                     file.write(path + "\t" + str(score)+"\t"+str(np.sqrt(mse))+"\n")
         file.close()
-        print('done predicting')
 
 
 
