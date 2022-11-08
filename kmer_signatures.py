@@ -14,9 +14,8 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 class Kmers(object):
 
-    def __init__(self, pathToSamples,pathToTest,kmerLength,disease,testSamples):
+    def __init__(self, pathToSamples,pathToTest,kmerLength,disease):
 
-        self.testSamples=testSamples
         self.pathabundanceDir = ""
         self.testabundaceDir = ""
         self.kmerLength = kmerLength
@@ -365,27 +364,11 @@ class Kmers(object):
 
 if __name__ == "__main__":
     start_time = datetime.now()
-    kmer=Kmers("/nfs/home/students/a.miroshina/all_100/","/nfs/home/students/a.miroshina/test/",22,"demo",["x","y"])
+    kmer=Kmers("/nfs/home/students/a.miroshina/all_100/","/nfs/home/students/a.miroshina/test/",22,"demo")
 
- #   kmer.kmerMatrix = pd.read_csv("C:/Users/kunde/PycharmProjects/bachelor/countmatrix_train.tsv", sep='\t')
- #   kmer.pathwayMatrix = pd.read_csv("C:/Users/kunde/PycharmProjects/bachelor/pathway_train.tsv", sep='\t')
- #   kmer.kmerTest = pd.read_csv("C:/Users/kunde/PycharmProjects/bachelor/countmatrix_test_healthy.tsv", sep='\t')
-  #  kmer.pathwayTest = pd.read_csv("C:/Users/kunde/PycharmProjects/bachelor/pathway_test_healthy.tsv", sep='\t')
-
-  #  kmer.kmerMatrix = kmer.kmerMatrix.set_index(kmer.kmerMatrix["kmer"])
-  #  kmer.kmerTest = kmer.kmerTest.set_index(kmer.kmerTest["kmer"])
-   # kmer.pathwayMatrix = kmer.pathwayMatrix.set_index(kmer.pathwayMatrix["function"])
-   # kmer.pathwayTest = kmer.pathwayTest.set_index(kmer.pathwayTest["function"])
-
-   # del kmer.pathwayMatrix["function"]
-   # del kmer.pathwayTest["function"]
-   # del kmer.kmerMatrix["kmer"]
-   # del kmer.kmerTest["kmer"]
-  #  print(len(kmer.kmerMatrix))
+ 
     kmer.prepare_train()
     kmer.predict_test()
-  #  for i in range(0,len(kmer.kmerMatrix)) :
-  #      print(kmer.kmerMatrix.iloc[i].to_numpy())
-  #      print(clr(kmer.kmerMatrix.iloc[i].to_numpy()))
+  
     end_time = datetime.now()
     print('Duration: {}'.format(end_time - start_time))
